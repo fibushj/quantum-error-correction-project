@@ -1,3 +1,5 @@
+import time
+
 from qiskit import QuantumRegister, ClassicalRegister, transpile
 from qiskit import execute, Aer
 from qiskit.providers.aer.noise.errors import pauli_error, depolarizing_error
@@ -33,30 +35,51 @@ class Codes:
     # SURFACE2 =  # to be implemented, d=5
 
 
-ONE_QUBIT_GATE_ERROR = 0.1
-TWO_QUBIT_GATE_ERROR = 0.0304
-READOUT_ERROR = 0.005
-RANDOMIZED_BENCHMARKING = True
-NOISE = True
+class Config:
+    ONE_QUBIT_GATE_ERROR = 0.001
+    TWO_QUBIT_GATE_ERROR = 0.003
+    READOUT_ERROR = 0.005
+    RANDOMIZED_BENCHMARKING = True
+    NOISE = True
 
-CODE = Codes.STEANE
-NUMBER_OF_CODE_QUBITS = CODE
-NUMBER_ANCILLAS_X = int(NUMBER_OF_CODE_QUBITS / 2)
+    @staticmethod
+    def configure_code(code):
+        Config.CODE = code
+        Config.NUMBER_OF_CODE_QUBITS = code
+        Config.NUMBER_ANCILLAS_X = int(Config.NUMBER_OF_CODE_QUBITS / 2)
 
 
 def main():
-    aer_sim = Aer.get_backend('aer_simulator')
-    quantum_circuit = generate_circuit()
-    noise_model = create_noise_model()
-    run(quantum_circuit, noise_model, aer_sim)
+    codes_to_run = [
+        Codes.NO_CORRECTION,
+        Codes.STEANE,
+        Codes.SURFACE1
+    ]
+    for code in codes_to_run:
+        Config.configure_code(code)
+        for randomized_benchmarking_length in [1]:
+            Config.RANDOMIZED_BENCHMARKING_LENGTH = randomized_benchmarking_length
+            print_conf()
+            aer_sim = Aer.get_backend('aer_simulator')
+            quantum_circuit = generate_circuit()
+            noise_model = create_noise_model()
+            accuracy = run(quantum_circuit, noise_model, aer_sim)
+            with open("results.txt", 'a') as f:
+                f.write(str(accuracy) + '\n')
+
+
+def print_conf():
+    print("num qubits: " + str(Config.NUMBER_OF_CODE_QUBITS))
+    print("RB: " + str(Config.RANDOMIZED_BENCHMARKING))
+    print("RB length: " + str(Config.RANDOMIZED_BENCHMARKING_LENGTH))
+    print("noise: " + str(Config.NOISE))
 
 
 def run(quantum_circuit, noise_model, aer_sim):
-    if CODE in [Codes.STEANE, Codes.NO_CORRECTION]:
+    if Config.CODE in [Codes.STEANE, Codes.NO_CORRECTION]:
         counts = run_simulations_for_circuit(aer_sim, quantum_circuit, noise_model)
-        report_results(counts)
-        return
-    run_surface_code(aer_sim, noise_model, quantum_circuit)
+        return calculate_accuracy(counts)
+    return run_surface_code(aer_sim, noise_model, quantum_circuit)
 
 
 def run_surface_code(aer_sim, noise_model, quantum_circuit):
@@ -64,34 +87,34 @@ def run_surface_code(aer_sim, noise_model, quantum_circuit):
     draw_circuit(quantum_circuit)
     counts = execute(quantum_circuit, backend=aer_sim, noise_model=noise_model, shots=200).result().get_counts()
     # print(counts)
-    code_distance = 3 if CODE == Codes.SURFACE1 else 5
+    code_distance = 3 if Config.CODE == Codes.SURFACE1 else 5
     benchmarking_tool = SurfaceCodeBenchmarkingTool(
         decoder=GraphDecoder(d=code_distance, T=1),
         readout_circuit=quantum_circuit
     )
     accuracy = 1 - benchmarking_tool.logical_error_rate(counts, correct_logical_value=0)
-    print("accuracy: " + str(accuracy))
+    return accuracy
 
 
 def create_noise_model():
     noise_model = NoiseModel()
-    if NOISE:
+    if Config.NOISE:
         add_one_gate_error(noise_model)
-        # add_two_gate_error(noise_model)
+        add_two_gate_error(noise_model)
         add_readout_error(noise_model)
         noise_model.add_basis_gates(['u1', 'u2', 'u3', 'cx'])
     return noise_model
 
 
 def add_readout_error(noise_model):
-    readout_error_prob = READOUT_ERROR
+    readout_error_prob = Config.READOUT_ERROR
     readout_error = ReadoutError(
         [[1 - readout_error_prob, readout_error_prob], [readout_error_prob, 1 - readout_error_prob]])
     noise_model.add_readout_error(readout_error, [0])  # add readout error to 1st qubit
 
 
 def add_two_gate_error(noise_model):
-    depolarizing_error_2 = depolarizing_error(TWO_QUBIT_GATE_ERROR, 2)
+    depolarizing_error_2 = depolarizing_error(Config.TWO_QUBIT_GATE_ERROR, 2)
     t1 = 10e10
     t2 = 2e8
     two_qubit_gate_time = 2.1e5
@@ -101,7 +124,7 @@ def add_two_gate_error(noise_model):
 
 
 def add_one_gate_error(noise_model):
-    depolarizing_error_1 = depolarizing_error(ONE_QUBIT_GATE_ERROR, 1)
+    depolarizing_error_1 = depolarizing_error(Config.ONE_QUBIT_GATE_ERROR, 1)
     # all times are in microseconds
     t1 = 10e10
     t2 = 2e8
@@ -112,17 +135,19 @@ def add_one_gate_error(noise_model):
 
 
 def append_randomized_benchmarking_subcircuit(quantum_circuit):
-    if RANDOMIZED_BENCHMARKING:
+    if Config.RANDOMIZED_BENCHMARKING:
         quantum_circuit.barrier()
         with open(RANDOMIZED_BENCHMARKING_FILE, 'rb') as f:
             qc = pickle.load(f)
+        # for _ in range(Config.RANDOMIZED_BENCHMARKING_LENGTH-1):
+        #     qc = qc.compose(qc)
         quantum_circuit.compose(qc, inplace=True)
         quantum_circuit.barrier()
 
 
-def report_results(counts):
+def calculate_accuracy(counts):
     accuracy = counts['0'] / (counts['0'] + counts['1'])
-    print("accuracy: " + str(accuracy))
+    return accuracy
 
 
 def run_simulations_for_circuit(aer_sim, quantum_circuit, noise_model):
@@ -141,20 +166,20 @@ def run_simulations_for_circuit(aer_sim, quantum_circuit, noise_model):
 
 
 def draw_circuit(quantum_circuit):
-    if CODE in [Codes.STEANE, Codes.NO_CORRECTION]:
+    if Config.CODE in [Codes.STEANE, Codes.NO_CORRECTION]:
         quantum_circuit.draw('mpl', scale=2, style={'backgroundcolor': '#EEEEEE'})
     else:
         quantum_circuit.draw(output='mpl', fold=150)
-    plt.savefig(f"circuit{NUMBER_OF_CODE_QUBITS}.png")
+    plt.savefig(f"circuit{Config.NUMBER_OF_CODE_QUBITS}.png")
     print("circuit has been drawn")
 
 
 def generate_circuit():
-    if CODE == Codes.STEANE:
+    if Config.CODE == Codes.STEANE:
         return generate_circuit_steane()
-    if CODE == Codes.SURFACE1:
+    if Config.CODE == Codes.SURFACE1:
         return generate_circuit_surface()
-    if CODE == Codes.NO_CORRECTION:
+    if Config.CODE == Codes.NO_CORRECTION:
         return generate_circuit_without_correction()
 
 
@@ -179,8 +204,8 @@ def entange_qubits(quantum_circuit):
 
 
 def generate_circuit_steane():
-    all_qubits = range(NUMBER_OF_CODE_QUBITS)
-    quantum_circuit = QuantumCircuit(NUMBER_OF_CODE_QUBITS)
+    all_qubits = range(Config.NUMBER_OF_CODE_QUBITS)
+    quantum_circuit = QuantumCircuit(Config.NUMBER_OF_CODE_QUBITS)
     ancillas_x, ancillas_z, classical_register_x, classical_register_z, original_qubit_final_outcome = define_ancillas_and_classical_registers(
         quantum_circuit)
 
@@ -219,10 +244,10 @@ def append_stabilizers_logic_steane(quantum_circuit):
 
 
 def define_ancillas_and_classical_registers(quantum_circuit):
-    ancillas_x = QuantumRegister(NUMBER_ANCILLAS_X, 'ancillas_x')
-    ancillas_z = QuantumRegister(NUMBER_ANCILLAS_X, 'ancillas_z')
-    classical_register_x = ClassicalRegister(NUMBER_ANCILLAS_X, 'synd_X')
-    classical_register_z = ClassicalRegister(NUMBER_ANCILLAS_X, 'synd_Z')
+    ancillas_x = QuantumRegister(Config.NUMBER_ANCILLAS_X, 'ancillas_x')
+    ancillas_z = QuantumRegister(Config.NUMBER_ANCILLAS_X, 'ancillas_z')
+    classical_register_x = ClassicalRegister(Config.NUMBER_ANCILLAS_X, 'synd_X')
+    classical_register_z = ClassicalRegister(Config.NUMBER_ANCILLAS_X, 'synd_Z')
     original_qubit_final_outcome = ClassicalRegister(1, 'outcome')
     quantum_circuit.add_register(ancillas_x)
     quantum_circuit.add_register(ancillas_z)
@@ -243,15 +268,15 @@ def decode_logical_qubit_steane(all_qubits, quantum_circuit):
 
 
 def correct_errors_steane(classical_register_x, classical_register_z, quantum_circuit):
-    for i in range(NUMBER_OF_CODE_QUBITS):
+    for i in range(Config.NUMBER_OF_CODE_QUBITS):
         quantum_circuit.z(i).c_if(classical_register_z, i + 1)
         quantum_circuit.x(i).c_if(classical_register_x, i + 1)
 
 
 def measure_ancillas(ancillas_x, ancillas_z, classical_register_x, classical_register_z, quantum_circuit):
-    for i in range(NUMBER_ANCILLAS_X):
+    for i in range(Config.NUMBER_ANCILLAS_X):
         quantum_circuit.measure(ancillas_x[i], classical_register_x[i])
-    for i in range(NUMBER_ANCILLAS_X):
+    for i in range(Config.NUMBER_ANCILLAS_X):
         quantum_circuit.measure(ancillas_z[i], classical_register_z[i])
 
 
@@ -308,22 +333,5 @@ def Encoding7():
     return q_encoding
 
 
-PRINT_MESSAGE = """ notes:
-       _               _          _ _  __  __    __             _                                 _ _ _ 
-      | |             | |        | (_)/ _|/ _|  / _|           (_)                               | | | |
-   ___| |__   ___  ___| | __   __| |_| |_| |_  | |_ ___  _ __   _ _ __ ___   __ _  __ _  ___  ___| | | |
-  / __| '_ \ / _ \/ __| |/ /  / _` | |  _|  _| |  _/ _ \| '__| | | '_ ` _ \ / _` |/ _` |/ _ \/ __| | | |
- | (__| | | |  __/ (__|   <  | (_| | | | | |   | || (_) | |    | | | | | | | (_| | (_| |  __/\__ \_|_|_|
-  \___|_| |_|\___|\___|_|\_\  \__,_|_|_| |_|   |_| \___/|_|    |_|_| |_| |_|\__,_|\__, |\___||___(_|_|_)
-                                                                                   __/ |                
-                                                                                  |___/                 
-- remember to use barrier between gates to avoid optimization combining them to one gate
-
-"""
-
 if __name__ == "__main__":
-    print(PRINT_MESSAGE)
-    print("num qubits: " + str(NUMBER_OF_CODE_QUBITS))
-    print("RB: " + str(RANDOMIZED_BENCHMARKING))
-    print("noise: " + str(NOISE))
     main()
