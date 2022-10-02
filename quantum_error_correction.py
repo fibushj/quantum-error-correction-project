@@ -21,11 +21,6 @@ without correction: 0.65
 steane code: 0.77
 rotated surface code: 0.9
 
-- the surface code is rather slow. TBD
-
-- in this commit, TWO_QUBIT_GATE_ERROR isn't applied. TBD
-
-
 """
 
 class Codes:
