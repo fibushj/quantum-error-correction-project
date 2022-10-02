@@ -55,24 +55,32 @@ def main():
         Codes.STEANE,
         Codes.SURFACE1
     ]
-    for code in codes_to_run:
-        Config.configure_code(code)
-        for randomized_benchmarking_length in [1]:
+    for randomized_benchmarking_length in range(0, 75, 5):
+        for code in codes_to_run:
+            Config.configure_code(code)
             Config.RANDOMIZED_BENCHMARKING_LENGTH = randomized_benchmarking_length
+
             print_conf()
+            start_time = time.time()
+
             aer_sim = Aer.get_backend('aer_simulator')
             quantum_circuit = generate_circuit()
             noise_model = create_noise_model()
             accuracy = run(quantum_circuit, noise_model, aer_sim)
+
+            elapsed_time = time.time() - start_time
+            print(elapsed_time)
+
+            result = [Config.NUMBER_OF_CODE_QUBITS, Config.RANDOMIZED_BENCHMARKING_LENGTH, accuracy]
             with open("results.txt", 'a') as f:
-                f.write(str(accuracy) + '\n')
+                f.write(",".join(map(str, result)) + '\n')
 
 
 def print_conf():
     print("num qubits: " + str(Config.NUMBER_OF_CODE_QUBITS))
-    print("RB: " + str(Config.RANDOMIZED_BENCHMARKING))
+    # print("RB: " + str(Config.RANDOMIZED_BENCHMARKING))
     print("RB length: " + str(Config.RANDOMIZED_BENCHMARKING_LENGTH))
-    print("noise: " + str(Config.NOISE))
+    # print("noise: " + str(Config.NOISE))
 
 
 def run(quantum_circuit, noise_model, aer_sim):
@@ -85,7 +93,7 @@ def run(quantum_circuit, noise_model, aer_sim):
 def run_surface_code(aer_sim, noise_model, quantum_circuit):
     quantum_circuit = transpile(quantum_circuit, aer_sim, optimization_level=0)
     draw_circuit(quantum_circuit)
-    counts = execute(quantum_circuit, backend=aer_sim, noise_model=noise_model, shots=200).result().get_counts()
+    counts = execute(quantum_circuit, backend=aer_sim, noise_model=noise_model).result().get_counts()
     # print(counts)
     code_distance = 3 if Config.CODE == Codes.SURFACE1 else 5
     benchmarking_tool = SurfaceCodeBenchmarkingTool(
@@ -136,12 +144,11 @@ def add_one_gate_error(noise_model):
 
 def append_randomized_benchmarking_subcircuit(quantum_circuit):
     if Config.RANDOMIZED_BENCHMARKING:
-        quantum_circuit.barrier()
         with open(RANDOMIZED_BENCHMARKING_FILE, 'rb') as f:
             qc = pickle.load(f)
-        # for _ in range(Config.RANDOMIZED_BENCHMARKING_LENGTH-1):
-        #     qc = qc.compose(qc)
-        quantum_circuit.compose(qc, inplace=True)
+        for _ in range(Config.RANDOMIZED_BENCHMARKING_LENGTH):
+            quantum_circuit.barrier()
+            quantum_circuit.compose(qc, inplace=True)
         quantum_circuit.barrier()
 
 
@@ -166,11 +173,11 @@ def run_simulations_for_circuit(aer_sim, quantum_circuit, noise_model):
 
 
 def draw_circuit(quantum_circuit):
-    if Config.CODE in [Codes.STEANE, Codes.NO_CORRECTION]:
-        quantum_circuit.draw('mpl', scale=2, style={'backgroundcolor': '#EEEEEE'})
-    else:
-        quantum_circuit.draw(output='mpl', fold=150)
-    plt.savefig(f"circuit{Config.NUMBER_OF_CODE_QUBITS}.png")
+    # if Config.CODE in [Codes.STEANE, Codes.NO_CORRECTION]:
+    #     quantum_circuit.draw('mpl', scale=2, style={'backgroundcolor': '#EEEEEE'})
+    # else:
+    #     quantum_circuit.draw(output='mpl', fold=150)
+    # plt.savefig(f"circuit{Config.NUMBER_OF_CODE_QUBITS}.png")
     print("circuit has been drawn")
 
 
