@@ -3,8 +3,9 @@ from collections import defaultdict
 from matplotlib import pyplot as plt
 
 from quantum_error_correction import Codes
-
-with open("results.txt") as f:
+# NOISE_MODEL_NAME = "honeywell"
+NOISE_MODEL_NAME = "ionq"
+with open(f"results_{NOISE_MODEL_NAME}.txt") as f:
     lines = f.read().splitlines()
 
 results = defaultdict(list)
@@ -30,4 +31,4 @@ for code in [Codes.NO_CORRECTION, Codes.STEANE, Codes.SURFACE1]:
 plt.xlabel("Randomized Benchmarking sequence length")
 plt.ylabel("Accuracy")
 # plt.show()
-plt.savefig('results.png')
+plt.savefig(f'results_{NOISE_MODEL_NAME}.png')

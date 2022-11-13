@@ -23,6 +23,7 @@ rotated surface code: 0.9
 
 """
 
+
 class Codes:
     NO_CORRECTION = 1
     STEANE = 7
@@ -30,10 +31,12 @@ class Codes:
     # SURFACE2 =  # to be implemented, d=5
 
 
+class NoiseModelName:
+    HONEYWELL = "honeywell"
+    IONQ = "ionq"
+
+
 class Config:
-    ONE_QUBIT_GATE_ERROR = 0.001
-    TWO_QUBIT_GATE_ERROR = 0.003
-    READOUT_ERROR = 0.005
     RANDOMIZED_BENCHMARKING = True
     NOISE = True
 
@@ -43,6 +46,28 @@ class Config:
         Config.NUMBER_OF_CODE_QUBITS = code
         Config.NUMBER_ANCILLAS_X = int(Config.NUMBER_OF_CODE_QUBITS / 2)
 
+    @staticmethod
+    def configure_noise_model(noise_model):
+        if noise_model == NoiseModelName.HONEYWELL:
+            Config.ONE_QUBIT_GATE_ERROR = 1e-4
+            Config.TWO_QUBIT_GATE_ERROR = 2.8e-3
+            Config.READOUT_ERROR = 3e-3
+            # all times are in nanoseconds
+            Config.T1 = 1e15
+            Config.T2 = 3e9
+            Config.ONE_QUBIT_GATE_TIME = 1e4
+            Config.TWO_QUBIT_GATE_TIME = 2.1e5
+
+        if noise_model == NoiseModelName.IONQ:
+            Config.ONE_QUBIT_GATE_ERROR = 5e-4
+            Config.TWO_QUBIT_GATE_ERROR = 4e-3
+            Config.READOUT_ERROR = 3.9e-3
+            # all times are in nanoseconds
+            Config.T1 = 1e10
+            Config.T2 = 1e9
+            Config.ONE_QUBIT_GATE_TIME = 1.35e5
+            Config.TWO_QUBIT_GATE_TIME = 6e5
+
 
 def main():
     codes_to_run = [
@@ -50,25 +75,31 @@ def main():
         Codes.STEANE,
         Codes.SURFACE1
     ]
-    for randomized_benchmarking_length in range(0, 75, 5):
-        for code in codes_to_run:
-            Config.configure_code(code)
-            Config.RANDOMIZED_BENCHMARKING_LENGTH = randomized_benchmarking_length
+    noise_model_names = [
+        # NoiseModelName.HONEYWELL
+        NoiseModelName.IONQ
+                    ]
+    for noise_model_name in noise_model_names:
+        Config.configure_noise_model(noise_model_name)
+        for randomized_benchmarking_length in range(60, 75, 5):
+            for code in codes_to_run:
+                Config.configure_code(code)
+                Config.RANDOMIZED_BENCHMARKING_LENGTH = randomized_benchmarking_length
 
-            print_conf()
-            start_time = time.time()
+                print_conf()
+                start_time = time.time()
 
-            aer_sim = Aer.get_backend('aer_simulator')
-            quantum_circuit = generate_circuit()
-            noise_model = create_noise_model()
-            accuracy = run(quantum_circuit, noise_model, aer_sim)
+                aer_sim = Aer.get_backend('aer_simulator')
+                quantum_circuit = generate_circuit()
+                noise_model = create_noise_model()
+                accuracy = run(quantum_circuit, noise_model, aer_sim)
 
-            elapsed_time = time.time() - start_time
-            print(elapsed_time)
+                elapsed_time = time.time() - start_time
+                print(elapsed_time)
 
-            result = [Config.NUMBER_OF_CODE_QUBITS, Config.RANDOMIZED_BENCHMARKING_LENGTH, accuracy]
-            with open("results.txt", 'a') as f:
-                f.write(",".join(map(str, result)) + '\n')
+                result = [Config.NUMBER_OF_CODE_QUBITS, Config.RANDOMIZED_BENCHMARKING_LENGTH, accuracy]
+                with open(f"results_{noise_model_name}.txt", 'a') as f:
+                    f.write(",".join(map(str, result)) + '\n')
 
 
 def print_conf():
@@ -118,21 +149,14 @@ def add_readout_error(noise_model):
 
 def add_two_gate_error(noise_model):
     depolarizing_error_2 = depolarizing_error(Config.TWO_QUBIT_GATE_ERROR, 2)
-    t1 = 10e10
-    t2 = 2e8
-    two_qubit_gate_time = 2.1e5
-    thermal_relaxation_error_2 = thermal_relaxation_error(t1, t2, two_qubit_gate_time)
+    thermal_relaxation_error_2 = thermal_relaxation_error(Config.T1, Config.T2, Config.TWO_QUBIT_GATE_TIME)
     thermal_relaxation_error_2 = thermal_relaxation_error_2.tensor(thermal_relaxation_error_2)
     noise_model.add_all_qubit_quantum_error(depolarizing_error_2.compose(thermal_relaxation_error_2), 'cx')
 
 
 def add_one_gate_error(noise_model):
     depolarizing_error_1 = depolarizing_error(Config.ONE_QUBIT_GATE_ERROR, 1)
-    # all times are in microseconds
-    t1 = 10e10
-    t2 = 2e8
-    one_qubit_gate_time = 1e4
-    thermal_relaxation_error_1 = thermal_relaxation_error(t1, t2, one_qubit_gate_time)
+    thermal_relaxation_error_1 = thermal_relaxation_error(Config.T1, Config.T2, Config.ONE_QUBIT_GATE_TIME)
     noise_model.add_all_qubit_quantum_error(depolarizing_error_1.compose(thermal_relaxation_error_1),
                                             ['u1', 'u2', 'u3'])
 

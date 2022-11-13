@@ -3,3 +3,4 @@ numpy==1.21.6
 qiskit==0.38.0
 qiskit_terra==0.21.2
 networkx==2.8.5
+qiskit-ignis
