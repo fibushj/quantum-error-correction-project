@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Generates circuits for quantum error correction with surface code patches.
+Credit: https://github.com/JazzyCH/qiskit_surface_codes
 """
 import copy
 import warnings
