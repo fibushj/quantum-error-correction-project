@@ -3,8 +3,8 @@ from collections import defaultdict
 from matplotlib import pyplot as plt
 
 from quantum_error_correction import Codes
-# NOISE_MODEL_NAME = "honeywell"
-NOISE_MODEL_NAME = "ionq"
+NOISE_MODEL_NAME = "honeywell"
+# NOISE_MODEL_NAME = "ionq"
 with open(f"results_{NOISE_MODEL_NAME}.txt") as f:
     lines = f.read().splitlines()
 

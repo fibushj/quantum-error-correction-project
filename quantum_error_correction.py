@@ -1,4 +1,5 @@
 import time
+from math import sqrt
 
 from qiskit import QuantumRegister, ClassicalRegister, transpile
 from qiskit import execute, Aer
@@ -28,7 +29,6 @@ class Codes:
     NO_CORRECTION = 1
     STEANE = 7
     SURFACE1 = 9  # rotated surface code with 9 physical qubits representing one logical qubit. d=3
-    # SURFACE2 =  # to be implemented, d=5
 
 
 class NoiseModelName:
@@ -81,7 +81,7 @@ def main():
                     ]
     for noise_model_name in noise_model_names:
         Config.configure_noise_model(noise_model_name)
-        for randomized_benchmarking_length in range(60, 75, 5):
+        for randomized_benchmarking_length in range(0, 75, 5):
             for code in codes_to_run:
                 Config.configure_code(code)
                 Config.RANDOMIZED_BENCHMARKING_LENGTH = randomized_benchmarking_length
@@ -121,7 +121,7 @@ def run_surface_code(aer_sim, noise_model, quantum_circuit):
     draw_circuit(quantum_circuit)
     counts = execute(quantum_circuit, backend=aer_sim, noise_model=noise_model).result().get_counts()
     # print(counts)
-    code_distance = 3 if Config.CODE == Codes.SURFACE1 else 5
+    code_distance = int(sqrt(Config.NUMBER_OF_CODE_QUBITS))
     benchmarking_tool = SurfaceCodeBenchmarkingTool(
         decoder=GraphDecoder(d=code_distance, T=1),
         readout_circuit=quantum_circuit
@@ -251,7 +251,8 @@ def generate_circuit_steane():
 
 
 def generate_circuit_surface():
-    quantum_circuit = SurfaceCodeLogicalQubit(3)
+    code_distance = int(sqrt(Config.NUMBER_OF_CODE_QUBITS))
+    quantum_circuit = SurfaceCodeLogicalQubit(code_distance)
     quantum_circuit.stabilize()
     append_randomized_benchmarking_subcircuit(quantum_circuit)
     # quantum_circuit.x(0)
